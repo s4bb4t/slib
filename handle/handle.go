@@ -36,6 +36,8 @@ func init() {
 	}
 
 	cfg.staticCheck()
+
+	lim = newLimiter(cfg.rps)
 }
 
 // ChangeConfig changes the configuration
@@ -51,6 +53,8 @@ func ChangeConfig(rps, duration uint16, method byte) {
 	}
 
 	cfg.staticCheck()
+
+	lim = newLimiter(cfg.rps)
 }
 
 var fatal = log.Fatalf
@@ -66,23 +70,20 @@ func (cfg *config) staticCheck() {
 
 // starts a tiker for whole programm
 func tiker() {
-	lim = newLimiter(cfg.rps)
-
-	go func() {
-		for {
-			select {
-			case <-lim.ticker.C:
-				lim.Lock()
-				lim.reqs = lim.RPS
-				lim.Unlock()
-			case <-lim.done:
-				lim.Lock()
-				lim.reqs = 0
-				lim.Unlock()
-				return
-			}
+	for {
+		select {
+		case <-lim.ticker.C:
+			lim.Lock()
+			lim.reqs = lim.RPS
+			lim.Unlock()
+		case <-lim.done:
+			lim.Lock()
+			lim.reqs = 0
+			lim.ticker.Stop()
+			lim.Unlock()
+			return
 		}
-	}()
+	}
 }
 
 // makes new limiter struct with rps from config
@@ -92,36 +93,30 @@ func newLimiter(rps uint16) *limiter {
 
 // Makes a single GET request to the specified URL. Always respects the rate limiter.
 func Get(url string) {
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		select {
-		case <-lim.done:
-			lim.reqs = 0
+	select {
+	case <-lim.done:
+		return
+	default:
+		lim.Lock()
+		if lim.reqs == 0 {
+			lim.Unlock()
 			return
-		default:
-			if lim.reqs == 0 {
-				return
-			} else {
-				lim.Lock()
-				lim.cnt++
-				lim.reqs--
-				lim.Unlock()
+		} else {
+			lim.cnt++
+			lim.reqs--
+			lim.Unlock()
 
-				client := &http.Client{}
-				_, err := client.Get(url)
-				if err != nil {
-					select {
-					case <-lim.done:
-					default:
-						close(lim.done)
-					}
+			client := &http.Client{}
+			_, err := client.Get(url)
+			if err != nil {
+				select {
+				case <-lim.done:
+				default:
+					close(lim.done)
 				}
 			}
 		}
-		wg.Done()
-	}()
-	wg.Wait()
+	}
 }
 
 // Makes a single POST request to the specified URL with the provided body. Always respects the rate limiter.
@@ -132,7 +127,6 @@ func Post(url string, body []byte) {
 		if lim.reqs == 0 {
 			return
 		}
-		fmt.Println(lim.reqs)
 		lim.Lock()
 		lim.cnt++
 		lim.reqs--
@@ -160,13 +154,14 @@ func Post(url string, body []byte) {
 func Attack(method string, url string, body ...[]byte) string {
 	T := time.Now()
 	ch := make(chan struct{})
-	tiker()
 
 	go func() {
 		time.Sleep(time.Duration(cfg.duration) * time.Second)
+		lim.ticker.Stop()
 		close(ch)
 	}()
 
+	go tiker()
 	switch cfg.method {
 	case 1:
 		switch method {
@@ -175,6 +170,14 @@ func Attack(method string, url string, body ...[]byte) string {
 				select {
 				case <-ch:
 					return fmt.Sprintf("%v requests per %v seconds", lim.cnt, time.Since(T))
+				case <-lim.done:
+					select {
+					case <-ch:
+						return fmt.Sprintf("%v requests per %v seconds", lim.cnt, time.Since(T))
+					default:
+						close(ch)
+						return fmt.Sprintf("%v requests per %v seconds", lim.cnt, time.Since(T))
+					}
 				default:
 					if lim.reqs > 0 {
 						go Get(url)
@@ -182,16 +185,6 @@ func Attack(method string, url string, body ...[]byte) string {
 				}
 			}
 		case "POST":
-			for {
-				select {
-				case <-ch:
-					return fmt.Sprintf("%v requests per %v seconds", lim.cnt, time.Since(T))
-				default:
-					if lim.reqs > 0 {
-						go Post(url, body[0])
-					}
-				}
-			}
 		default:
 			return "Invalid method"
 		}
@@ -200,3 +193,37 @@ func Attack(method string, url string, body ...[]byte) string {
 	}
 	return "Something went wrong"
 }
+
+/*
+func Get(url string) {
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		select {
+		case <-lim.done:
+			lim.reqs = 0
+			return
+		default:
+			if lim.reqs == 0 {
+				return
+			} else {
+				lim.Lock()
+				lim.cnt++
+				lim.reqs--
+				lim.Unlock()
+
+				client := &http.Client{}
+				_, err := client.Get(url)
+				if err != nil {
+					select {
+					case <-lim.done:
+					default:
+						close(lim.done)
+					}
+				}
+				wg.Done()
+			}
+		}
+	}()
+	wg.Wait()
+}*/
