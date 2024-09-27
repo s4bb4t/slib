@@ -20,8 +20,8 @@ duration uint16
 detain   bool
 ```
 `RPS` - Requests per second (uint16)
-`duration` - Duration of repetition requests (uint16)
-`detain` - Reflets method of a gerenation requests (bool)
+`duration` - Duration of requests repetition  (uint16)
+`detain` - Reflets method of a requests gerenation  (bool)
 
 You must use ChangeConfig to configure programm.
 ```go
