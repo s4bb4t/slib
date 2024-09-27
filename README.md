@@ -38,11 +38,13 @@ Post(url, body)
 
 ### Attack()
 And finnaly the Attack() function.
-It recieves the `Method`, `URL`, and optionally `body` parameters and returns string, which describes how many requests was made per duration time.
+It recieves the `Method`, `URL`, and optionally `body` parameters and returns string,
+which describes how many requests was made per duration time.
+If u don't need return value, just use the function.
 Here is an example:
 
 ```go
-Attack("GET", "https://localhost")
+fmt.Println(Attack("GET", "https://localhost"))
 Attack("POST", "https://localhost", body)
 ```
 
