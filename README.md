@@ -27,6 +27,13 @@ You must use ChangeConfig to configure programm.
 ```go
 ChangeConfig(100, 5, true)
 ```
+Default configuration will be used if you do not changes the configuration:
+```go
+rps:      100,
+duration: 5,
+detain:   false,
+```
+
 ### Get() Post()
 There is 2 functions of single request:
 ```go

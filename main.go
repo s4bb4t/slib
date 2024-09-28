@@ -7,6 +7,6 @@ import (
 )
 
 func main() {
-	handle.ChangeConfig(400, 3, false)
+	handle.ChangeConfig(1, 3, true)
 	fmt.Println(handle.Attack("GET", "https://easydev.club/api/v1/todos"))
 }

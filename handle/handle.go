@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -19,13 +19,22 @@ type config struct {
 }
 
 type limiter struct {
-	cnt       uint16
 	RPS       uint16
-	reqs      uint16
+	reqs      atomic.Int32
 	toExecute chan struct{}
 	done      chan struct{}
 	ticker    time.Ticker
-	sync.Mutex
+	cnt       atomic.Int32
+	AtomicShards
+}
+
+type AtomicShards struct {
+	shards []AtomicCounter
+}
+
+type AtomicCounter struct {
+	cnt atomic.Int32
+	_   [60]byte
 }
 
 // initializes default configuration for programm.
@@ -71,12 +80,17 @@ func (cfg *config) staticCheck() {
 
 // makes new limiter struct with rps from config
 func newLimiter(rps uint16) *limiter {
-	return &limiter{
-		RPS:       rps,
-		reqs:      rps,
-		done:      make(chan struct{}),
-		toExecute: make(chan struct{}, rps),
-		ticker:    *time.NewTicker(time.Second)}
+	reqs := cfg.rps * cfg.duration
+	var l limiter
+	l.RPS = rps
+	l.reqs.Add(int32(rps))
+	l.done = make(chan struct{})
+	l.toExecute = make(chan struct{}, rps)
+	l.ticker = *time.NewTicker(time.Second)
+	for i := 0; i < int(reqs); i++ {
+		l.shards = append(l.shards, AtomicCounter{})
+	}
+	return &l
 }
 
 // starts a global ticker handler
@@ -97,13 +111,9 @@ func ticker() {
 		case false:
 			select {
 			case <-lim.ticker.C:
-				lim.Lock()
-				lim.reqs = lim.RPS
-				lim.Unlock()
+				lim.reqs.Add(int32(lim.RPS))
 			case <-lim.done:
-				lim.Lock()
-				lim.reqs = 0
-				lim.Unlock()
+				lim.reqs.Store(0)
 				return
 			}
 		}
@@ -112,9 +122,10 @@ func ticker() {
 
 // Recieve desired METHOD, URL and optional body. Makes RPS * duration requests to URL.
 // Attack will stop immediately after `duration` seconds or after all requests have sent.
-func Attack(method string, url string, body ...[]byte) string {
+func Attack(method, url string, body ...[]byte) string {
 	ch := make(chan struct{})
-
+	var cnt int32
+	reqsNum := int(lim.RPS * cfg.duration)
 	go func() {
 		time.Sleep(time.Duration(cfg.duration) * time.Second)
 		close(ch)
@@ -134,13 +145,16 @@ func Attack(method string, url string, body ...[]byte) string {
 			go ticker()
 
 			go func() {
-				for i := 0; i < int(lim.RPS*cfg.duration); i++ {
-					go getDetained(url)
+				for i := 0; i < reqsNum; i++ {
+					go getDetained(i, url)
 				}
 			}()
 
 			<-ch
-			return fmt.Sprintf("%v requests per %v", lim.cnt, time.Since(T))
+			for i := 0; i < reqsNum; i++ {
+				cnt += lim.shards[i].cnt.Load()
+			}
+			return fmt.Sprintf("%v requests per %v", cnt, time.Since(T))
 		case "POST":
 			go func() {
 				for i := 0; i < int(lim.RPS); i++ {
@@ -152,13 +166,18 @@ func Attack(method string, url string, body ...[]byte) string {
 			go ticker()
 
 			go func() {
-				for i := 0; i < int(lim.RPS*cfg.duration); i++ {
-					go postDetained(url, body[0])
+				for i := 0; i < reqsNum; i++ {
+					go postDetained(i, url, body[0])
 				}
 			}()
 
 			<-ch
-			return fmt.Sprintf("%v requests per %v", lim.cnt, time.Since(T))
+			for i := 0; i < reqsNum; i++ {
+				cnt += lim.shards[i].cnt.Load()
+			}
+			return fmt.Sprintf("%v requests per %v", cnt, time.Since(T))
+		default:
+			return "Invalid method"
 		}
 	} else {
 		switch method {
@@ -167,17 +186,17 @@ func Attack(method string, url string, body ...[]byte) string {
 			for {
 				select {
 				case <-ch:
-					return fmt.Sprintf("%v requests per %v", lim.cnt, time.Since(T))
+					return fmt.Sprintf("%v requests per %v", lim.cnt.Load(), time.Since(T))
 				case <-lim.done:
 					select {
 					case <-ch:
-						return fmt.Sprintf("%v requests per %v", lim.cnt, time.Since(T))
+						return fmt.Sprintf("%v requests per %v", lim.cnt.Load(), time.Since(T))
 					default:
 						close(ch)
-						return fmt.Sprintf("%v requests per %v", lim.cnt, time.Since(T))
+						return fmt.Sprintf("%v requests per %v", lim.cnt.Load(), time.Since(T))
 					}
 				default:
-					if lim.reqs > 0 {
+					if lim.reqs.Load() > 0 {
 						go Get(url)
 					}
 				}
@@ -187,17 +206,17 @@ func Attack(method string, url string, body ...[]byte) string {
 			for {
 				select {
 				case <-ch:
-					return fmt.Sprintf("%v requests per %v", lim.cnt, time.Since(T))
+					return fmt.Sprintf("%v requests per %v", lim.cnt.Load(), time.Since(T))
 				case <-lim.done:
 					select {
 					case <-ch:
-						return fmt.Sprintf("%v requests per %v", lim.cnt, time.Since(T))
+						return fmt.Sprintf("%v requests per %v", lim.cnt.Load(), time.Since(T))
 					default:
 						close(ch)
-						return fmt.Sprintf("%v requests per %v", lim.cnt, time.Since(T))
+						return fmt.Sprintf("%v requests per %v", lim.cnt.Load(), time.Since(T))
 					}
 				default:
-					if lim.reqs > 0 {
+					if lim.reqs.Load() > 0 {
 						go Post(url, body[0])
 					}
 				}
@@ -206,23 +225,20 @@ func Attack(method string, url string, body ...[]byte) string {
 			return "Invalid method"
 		}
 	}
-	return "Something went wrong"
 }
 
 // Makes a single GET request to the specified URL. Always respects the rate limiter.
 func Get(url string) {
-	lim.Lock()
 	select {
 	case <-lim.done:
 		return
 	default:
-		if lim.reqs == 0 {
-			lim.Unlock()
+		if lim.reqs.Load() == 0 {
 			return
 		} else {
-			lim.cnt++
-			lim.reqs--
-			lim.Unlock()
+			lim.reqs.Add(-1)
+			lim.cnt.Add(1)
+			fmt.Println(lim.reqs.Load(), lim.cnt.Load())
 
 			client := &http.Client{}
 			_, err := client.Get(url)
@@ -239,18 +255,15 @@ func Get(url string) {
 
 // Makes a single POST request to the specified URL with the provided body. Always respects the rate limiter.
 func Post(url string, body []byte) {
-	lim.Lock()
 	select {
 	case <-lim.done:
 		return
 	default:
-		if lim.reqs == 0 {
-			lim.Unlock()
+		if lim.reqs.Load() == 0 {
 			return
 		} else {
-			lim.cnt++
-			lim.reqs--
-			lim.Unlock()
+			lim.reqs.Add(-1)
+			lim.cnt.Add(1)
 
 			client := &http.Client{}
 
@@ -276,14 +289,12 @@ func Post(url string, body []byte) {
 }
 
 // Makes a single GET request to the specified URL. Always respects the rate limiter.
-func getDetained(url string) {
+func getDetained(id int, url string) {
 	select {
 	case <-lim.done:
 		return
 	case <-lim.toExecute:
-		lim.Lock()
-		lim.cnt++
-		lim.Unlock()
+		lim.shards[id].cnt.Add(1)
 
 		client := &http.Client{}
 		_, err := client.Get(url)
@@ -296,14 +307,12 @@ func getDetained(url string) {
 		}
 	}
 }
-func postDetained(url string, body []byte) {
+func postDetained(id int, url string, body []byte) {
 	select {
 	case <-lim.done:
 		return
 	case <-lim.toExecute:
-		lim.Lock()
-		lim.cnt++
-		lim.Unlock()
+		lim.shards[id].cnt.Add(1)
 
 		client := &http.Client{}
 
