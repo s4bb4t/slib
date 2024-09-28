@@ -1,64 +1,107 @@
-# SLIB
-for non-comertial use only
-this library is just a help-lib that makes my work faster and more comfortable
+Вот улучшенная версия README.md, соответствующая стандартам оформления и удобочитаемости:
 
 ---
 
-# Getting Started
+# SLIB
+
+> **For non-commercial use only**
+
+This library is designed to streamline and accelerate development tasks by providing convenient utility functions.
+
+---
+
+## Getting Started
+
+To install the library, run:
+
 ```bash
-    go get https://github.com/sabbatD/slib
+go get github.com/sabbatD/slib
 ```
-### Math package includes few math funcs.
-### Stringutils package includes en alphabetical letters and digits, include pointers.
 
-## Handle package
-### ChangeConfig func obviously changes the configuration.
-It recieves the folowing values
-```go
-rps      uint16
-duration uint16
-detain   bool
-```
-`RPS` - Requests per second (uint16)
-`duration` - Duration of requests repetition  (uint16)
-`detain` - Reflets method of a requests gerenation  (bool)
+### Overview
 
-You must use ChangeConfig to configure programm.
+SLIB includes several utility packages to help with common tasks:
+
+- **Math Package**: Provides a set of mathematical functions.
+- **Stringutils Package**: Includes alphabetical letters, digits, and pointer utilities.
+
+---
+
+## Handle Package
+
+### `ChangeConfig` Function
+
+The `ChangeConfig` function allows you to customize the configuration of the library. It accepts the following parameters:
+
+- **`rps`** (uint16) - Requests per second.
+- **`duration`** (uint16) - Duration for request repetition.
+- **`detain`** (bool) - Controls the request generation method.
+
+**Example**:
+
 ```go
 ChangeConfig(100, 5, true)
 ```
-Default configuration will be used if you do not changes the configuration:
+
+If you do not explicitly configure these settings, the library will use the default values:
+
+- `rps`: 100
+- `duration`: 5 seconds
+- `detain`: false
+
+---
+
+## HTTP Request Functions
+
+### `Get(url)` and `Post(url, body)`
+
+These functions are used to make single HTTP requests:
+
+- **`Get(url string)`**: Sends a GET request to the specified `url`.
+- **`Post(url string, body interface{})`**: Sends a POST request to the specified `url` with the provided `body`.
+
+**Example**:
+
 ```go
-rps:      100,
-duration: 5,
-detain:   false,
+Get("https://example.com")
+Post("https://example.com", body)
 ```
 
-### Get() Post()
-There is 2 functions of single request:
-```go
-Get(url)
-Post(url, body)
-```
-`url` - URL of the server
-`body` - Body of the request
+---
 
-### Attack()
-And finnaly the Attack() function.
-It recieves the `Method`, `URL`, and optionally `body` parameters and returns string,
-which describes how many requests was made per duration time.
-If u don't need return value, just use the function.
-Here is an example:
+## Attack Function
+
+The `Attack` function is designed to perform multiple HTTP requests at a given rate and duration. It supports both GET and POST methods.
+
+### Syntax:
+
+```go
+Attack(method string, url string, body ...interface{}) string
+```
+
+- **`method`**: HTTP method (`"GET"` or `"POST"`).
+- **`url`**: The target URL.
+- **`body`**: (Optional) Request body for POST requests.
+
+The function returns a string that details how many requests were made and how long the execution took.
+
+**Example**:
 
 ```go
 fmt.Println(Attack("GET", "https://localhost"))
 Attack("POST", "https://localhost", body)
 ```
 
-Return:
+**Output**:
+
 ```
-1200 requests per 3.0003329s
+1200 requests in 3.0003329 seconds
 ```
+
 ---
 
-### S4BB4T
+### Author
+
+SLIB is developed and maintained by **S4BB4T**.
+
+---
