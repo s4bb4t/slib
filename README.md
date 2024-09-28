@@ -76,7 +76,7 @@ The `Attack` function is designed to perform multiple HTTP requests at a given r
 ### Syntax:
 
 ```go
-Attack(method string, url string, body ...interface{}) string
+Attack(method, url string, body ...[]byte) string
 ```
 
 - **`method`**: HTTP method (`"GET"` or `"POST"`).
