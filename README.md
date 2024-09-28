@@ -31,7 +31,7 @@ SLIB includes several utility packages to help with common tasks:
 
 ### `ChangeConfig` Function
 
-The `ChangeConfig` function allows you to customize the configuration of the library. It accepts the following parameters:
+The `ChangeConfig` function allows you to customize the configuration of the library. You must use it to init the package It accepts the following parameters:
 
 - **`rps`** (uint16) - Requests per second.
 - **`duration`** (uint16) - Duration for request repetition.
@@ -42,12 +42,6 @@ The `ChangeConfig` function allows you to customize the configuration of the lib
 ```go
 ChangeConfig(100, 5, true)
 ```
-
-If you do not explicitly configure these settings, the library will use the default values:
-
-- `rps`: 100
-- `duration`: 5 seconds
-- `detain`: false
 
 ---
 

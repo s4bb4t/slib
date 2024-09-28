@@ -37,19 +37,6 @@ type AtomicCounter struct {
 	_   [60]byte
 }
 
-// initializes default configuration for programm.
-func init() {
-	cfg = &config{
-		rps:      100,
-		duration: 5,
-		detain:   false,
-	}
-
-	cfg.staticCheck()
-
-	lim = newLimiter(cfg.rps)
-}
-
 // ChangeConfig changes the configuration.
 // rps: the desired number of requests per second.
 // duration: the desired duration of requests repetitions.
