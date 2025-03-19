@@ -1,4 +1,4 @@
-module github.com/sabbatD/slib
+module github.com/s4bb4t/slib
 
 go 1.23.1
 

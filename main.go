@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/sabbatD/slib/handle"
+	"github.com/s4bb4t/slib/handle"
 )
 
 func main() {

@@ -15,7 +15,7 @@ This library is designed to streamline and accelerate development tasks by provi
 To install the library, run:
 
 ```bash
-go get github.com/sabbatD/slib
+go get github.com/s4bb4t/slib
 ```
 
 ### Overview
